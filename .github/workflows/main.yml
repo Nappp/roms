@@ -1,0 +1,38 @@
+
+name: compile
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: 'ANE_PIE_EMUI9.1.0'
+      
+      - name: Download Toolchain
+        run: git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b android-8.0.0_r51 --depth=1 $HOME/toolchain
+
+      - name: make
+        run: |
+          rsync -avr patch/Code_Opensource/ Code_Opensource/
+          cd Code_Opensource/kernel
+          mkdir -p ../out
+          export KBUILD_BUILD_USER='root' KBUILD_BUILD_HOST='localhost'  KBUILD_BUILD_TIMESTAMP='Thu Jan 1 00:00:00 CST 1970'
+          PATH=$PATH:$HOME/toolchain/bin make CROSS_COMPILE=aarch64-linux-android- ARCH=arm64 O=../out merge_hi6250_defconfig
+          PATH=$PATH:$HOME/toolchain/bin make CROSS_COMPILE=aarch64-linux-android- ARCH=arm64 O=../out -j$(nproc --all)
+        
+      - name: Pack
+        run: |
+            ls -lrt  $GITHUB_WORKSPACE/Code_Opensource/out/arch/arm64/boot
+            cd $GITHUB_WORKSPACE/Code_Opensource/kernel/tools 
+            cp $GITHUB_WORKSPACE/Code_Opensource/out/arch/arm64/boot/Image.gz ./kernel 
+            ./pack_kernerimage_cmd.sh
+            cp kernel.img /tmp/kernel.img
+
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: kernel.img
+          path: /tmp/kernel.img
+
